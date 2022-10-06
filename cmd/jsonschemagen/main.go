@@ -83,6 +83,16 @@ func generateStruct(schema *jsonschema.Schema, root *jsonschema.Schema) jen.Code
 	return jen.Struct(fields...)
 }
 
+func singlePatternProp(schema *jsonschema.Schema) *jsonschema.Schema {
+	if len(schema.PatternProperties) != 1 {
+		return nil
+	}
+	for _, prop := range schema.PatternProperties {
+		return &prop
+	}
+	return nil
+}
+
 func generateSchemaType(schema *jsonschema.Schema, root *jsonschema.Schema) jen.Code {
 	if schema == nil {
 		return jen.Interface()
@@ -104,12 +114,15 @@ func generateSchemaType(schema *jsonschema.Schema, root *jsonschema.Schema) jen.
 	case jsonschema.TypeInteger:
 		return jen.Int64()
 	case jsonschema.TypeObject:
-		if schema.AdditionalProperties != nil && schema.AdditionalProperties.IsFalse() && len(schema.PatternProperties) == 0 {
+		noAdditionalProps := schema.AdditionalProperties != nil && schema.AdditionalProperties.IsFalse()
+		if noAdditionalProps && len(schema.PatternProperties) == 0 {
 			if refName != "" {
 				return jen.Id(formatId(refName))
 			} else {
 				return generateStruct(schema, root)
 			}
+		} else if patternProp := singlePatternProp(schema); noAdditionalProps && patternProp != nil {
+			return jen.Map(jen.String()).Add(generateSchemaType(patternProp, root))
 		} else {
 			return jen.Map(jen.String()).Add(generateSchemaType(schema.AdditionalProperties, root))
 		}
