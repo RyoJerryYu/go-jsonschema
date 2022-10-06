@@ -98,7 +98,10 @@ func generateSchemaType(schema *jsonschema.Schema, root *jsonschema.Schema) jen.
 		return jen.Interface()
 	}
 
-	refName := refName(schema.Ref)
+	if refName := refName(schema.Ref); refName != "" {
+		return jen.Id(formatId(refName))
+	}
+
 	schema = resolveRef(schema, root)
 	switch schemaType(schema) {
 	case jsonschema.TypeNull:
@@ -116,11 +119,7 @@ func generateSchemaType(schema *jsonschema.Schema, root *jsonschema.Schema) jen.
 	case jsonschema.TypeObject:
 		noAdditionalProps := schema.AdditionalProperties != nil && schema.AdditionalProperties.IsFalse()
 		if noAdditionalProps && len(schema.PatternProperties) == 0 {
-			if refName != "" {
-				return jen.Id(formatId(refName))
-			} else {
-				return generateStruct(schema, root)
-			}
+			return generateStruct(schema, root)
 		} else if patternProp := singlePatternProp(schema); noAdditionalProps && patternProp != nil {
 			return jen.Map(jen.String()).Add(generateSchemaType(patternProp, root))
 		} else {
@@ -132,16 +131,6 @@ func generateSchemaType(schema *jsonschema.Schema, root *jsonschema.Schema) jen.
 }
 
 func generateDef(def *jsonschema.Schema, root *jsonschema.Schema, f *jen.File, name string) {
-	if schemaType(def) != jsonschema.TypeObject {
-		return
-	}
-	if def.AdditionalProperties == nil || !def.AdditionalProperties.IsFalse() {
-		return
-	}
-	if len(def.PatternProperties) > 0 {
-		return
-	}
-
 	f.Type().Id(formatId(name)).Add(generateSchemaType(def, root)).Line()
 }
 
