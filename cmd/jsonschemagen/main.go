@@ -19,16 +19,23 @@ func formatId(s string) string {
 	return s
 }
 
+func refName(ref string) string {
+	prefix := "#/$defs/"
+	if !strings.HasPrefix(ref, prefix) {
+		return ""
+	}
+	return strings.TrimPrefix(ref, prefix)
+}
+
 func resolveRef(def *jsonschema.Schema, root *jsonschema.Schema) *jsonschema.Schema {
 	if def.Ref == "" {
 		return def
 	}
 
-	prefix := "#/$defs/"
-	if !strings.HasPrefix(def.Ref, prefix) {
+	name := refName(def.Ref)
+	if name == "" {
 		log.Fatalf("unsupported $ref %q", def.Ref)
 	}
-	name := strings.TrimPrefix(def.Ref, prefix)
 
 	result, ok := root.Defs[name]
 	if !ok {
@@ -65,11 +72,23 @@ func schemaType(schema *jsonschema.Schema) jsonschema.Type {
 	}
 }
 
+func generateStruct(schema *jsonschema.Schema, root *jsonschema.Schema) jen.Code {
+	var fields []jen.Code
+	for name, prop := range schema.Properties {
+		id := formatId(name)
+		t := generateSchemaType(&prop, root)
+		tags := map[string]string{"json": name}
+		fields = append(fields, jen.Id(id).Add(t).Tag(tags))
+	}
+	return jen.Struct(fields...)
+}
+
 func generateSchemaType(schema *jsonschema.Schema, root *jsonschema.Schema) jen.Code {
 	if schema == nil {
 		return jen.Interface()
 	}
 
+	refName := refName(schema.Ref)
 	schema = resolveRef(schema, root)
 	switch schemaType(schema) {
 	case jsonschema.TypeNull:
@@ -85,7 +104,15 @@ func generateSchemaType(schema *jsonschema.Schema, root *jsonschema.Schema) jen.
 	case jsonschema.TypeInteger:
 		return jen.Int64()
 	case jsonschema.TypeObject:
-		return jen.Map(jen.String()).Add(generateSchemaType(schema.AdditionalProperties, root))
+		if schema.AdditionalProperties != nil && schema.AdditionalProperties.IsFalse() && len(schema.PatternProperties) == 0 {
+			if refName != "" {
+				return jen.Id(formatId(refName))
+			} else {
+				return generateStruct(schema, root)
+			}
+		} else {
+			return jen.Map(jen.String()).Add(generateSchemaType(schema.AdditionalProperties, root))
+		}
 	default:
 		return jen.Interface()
 	}
@@ -102,15 +129,7 @@ func generateDef(def *jsonschema.Schema, root *jsonschema.Schema, f *jen.File, n
 		return
 	}
 
-	var fields []jen.Code
-	for name, prop := range def.Properties {
-		id := formatId(name)
-		t := generateSchemaType(&prop, root)
-		tags := map[string]string{"json": name}
-		fields = append(fields, jen.Id(id).Add(t).Tag(tags))
-	}
-
-	f.Type().Id(formatId(name)).Struct(fields...).Line()
+	f.Type().Id(formatId(name)).Add(generateSchemaType(def, root)).Line()
 }
 
 func loadSchema(filename string) *jsonschema.Schema {
