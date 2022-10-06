@@ -72,12 +72,26 @@ func schemaType(schema *jsonschema.Schema) jsonschema.Type {
 	}
 }
 
+func isRequired(schema *jsonschema.Schema, propName string) bool {
+	for _, name := range schema.Required {
+		if name == propName {
+			return true
+		}
+	}
+	return false
+}
+
 func generateStruct(schema *jsonschema.Schema, root *jsonschema.Schema) jen.Code {
 	var fields []jen.Code
 	for name, prop := range schema.Properties {
 		id := formatId(name)
+		required := isRequired(schema, name)
 		t := generateSchemaType(&prop, root)
-		tags := map[string]string{"json": name}
+		jsonTag := name
+		if !required {
+			jsonTag += ",omitempty"
+		}
+		tags := map[string]string{"json": jsonTag}
 		fields = append(fields, jen.Id(id).Add(t).Tag(tags))
 	}
 	return jen.Struct(fields...)
