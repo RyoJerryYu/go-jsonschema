@@ -191,7 +191,9 @@ func main() {
 	schema := loadSchema(inputFilename)
 	f := jen.NewFile(pkgName)
 
-	generateDef(schema, schema, f, "root")
+	if schema.Ref == "" {
+		generateDef(schema, schema, f, "root")
+	}
 	for k, def := range schema.Defs {
 		generateDef(&def, schema, f, k)
 	}
