@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"log"
 	"os"
+	"sort"
 	"strings"
 	"unicode"
 
@@ -194,8 +195,15 @@ func main() {
 	if schema.Ref == "" {
 		generateDef(schema, schema, f, "root")
 	}
-	for k, def := range schema.Defs {
-		generateDef(&def, schema, f, k)
+
+	var names []string
+	for name := range schema.Defs {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+	for _, name := range names {
+		def := schema.Defs[name]
+		generateDef(&def, schema, f, name)
 	}
 
 	if err := f.Save(outputFilename); err != nil {
