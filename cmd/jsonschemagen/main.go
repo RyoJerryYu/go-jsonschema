@@ -164,12 +164,20 @@ func generateSchemaType(schema *jsonschema.Schema, root *jsonschema.Schema, requ
 			return jen.Map(jen.String()).Add(generateSchemaType(schema.AdditionalProperties, root, true))
 		}
 	default:
-		return jen.Interface()
+		return jen.Qual("encoding/json", "RawMessage")
 	}
 }
 
-func generateDef(def *jsonschema.Schema, root *jsonschema.Schema, f *jen.File, name string) {
-	f.Type().Id(formatId(name)).Add(generateSchemaType(def, root, true)).Line()
+func generateDef(schema *jsonschema.Schema, root *jsonschema.Schema, f *jen.File, name string) {
+	id := formatId(name)
+
+	if schema.Ref == "" && schemaType(schema) == "" {
+		f.Type().Id(id).Struct(
+			jen.Qual("encoding/json", "RawMessage"),
+		).Line()
+	} else {
+		f.Type().Id(id).Add(generateSchemaType(schema, root, true)).Line()
+	}
 }
 
 func loadSchema(filename string) *jsonschema.Schema {
