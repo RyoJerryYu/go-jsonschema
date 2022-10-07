@@ -175,6 +175,43 @@ func generateDef(schema *jsonschema.Schema, root *jsonschema.Schema, f *jen.File
 		f.Type().Id(id).Struct(
 			jen.Qual("encoding/json", "RawMessage"),
 		).Line()
+
+		var children []jsonschema.Schema
+		for _, child := range schema.AllOf {
+			children = append(children, child)
+		}
+		for _, child := range schema.AnyOf {
+			children = append(children, child)
+		}
+		for _, child := range schema.OneOf {
+			children = append(children, child)
+		}
+
+		for _, child := range children {
+			refName := refName(child.Ref)
+			if refName == "" {
+				continue
+			}
+
+			t := generateSchemaType(&child, root, false)
+
+			f.Func().Params(
+				jen.Id("v").Id(id),
+			).Id(formatId(refName)).Params().Params(
+				t,
+				jen.Id("error"),
+			).Block(
+				jen.Var().Id("out").Add(t),
+				jen.Id("err").Op(":=").Qual("encoding/json", "Unmarshal").Params(
+					jen.Id("v").Op(".").Id("RawMessage"),
+					jen.Op("&").Id("out"),
+				),
+				jen.Return(
+					jen.Id("out"),
+					jen.Id("err"),
+				),
+			).Line()
+		}
 	} else {
 		f.Type().Id(id).Add(generateSchemaType(schema, root, true)).Line()
 	}
