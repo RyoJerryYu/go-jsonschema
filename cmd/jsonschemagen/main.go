@@ -148,7 +148,7 @@ func generateSchemaType(schema *jsonschema.Schema, root *jsonschema.Schema, requ
 	case jsonschema.TypeArray:
 		return jen.Index().Add(generateSchemaType(schema.Items, root, required))
 	case jsonschema.TypeNumber:
-		return jen.Float64()
+		return jen.Qual("encoding/json", "Number")
 	case jsonschema.TypeString:
 		return jen.String()
 	case jsonschema.TypeInteger:
