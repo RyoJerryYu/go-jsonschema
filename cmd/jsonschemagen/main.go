@@ -5,6 +5,7 @@ import (
 	"log"
 	"os"
 	"strings"
+	"unicode"
 
 	"github.com/dave/jennifer/jen"
 
@@ -12,11 +13,13 @@ import (
 )
 
 func formatId(s string) string {
-	s = strings.Title(s)
-	// TODO: improve robustness
-	s = strings.ReplaceAll(s, "-", "")
-	s = strings.ReplaceAll(s, "_", "")
-	return s
+	fields := strings.FieldsFunc(s, func(c rune) bool {
+		return !unicode.IsLetter(c) && !unicode.IsNumber(c)
+	})
+	for i, v := range fields {
+		fields[i] = strings.Title(v)
+	}
+	return strings.Join(fields, "")
 }
 
 func refName(ref string) string {
