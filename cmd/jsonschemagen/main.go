@@ -86,8 +86,15 @@ func isRequired(schema *jsonschema.Schema, propName string) bool {
 }
 
 func generateStruct(schema *jsonschema.Schema, root *jsonschema.Schema) jen.Code {
+	var names []string
+	for name := range schema.Properties {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+
 	var fields []jen.Code
-	for name, prop := range schema.Properties {
+	for _, name := range names {
+		prop := schema.Properties[name]
 		id := formatId(name)
 		required := isRequired(schema, name)
 		t := generateSchemaType(&prop, root, required)
