@@ -189,6 +189,15 @@ func generateDef(schema *jsonschema.Schema, root *jsonschema.Schema, f *jen.File
 		for _, child := range schema.OneOf {
 			children = append(children, child)
 		}
+		if schema.Then != nil {
+			children = append(children, *schema.Then)
+		}
+		if schema.Else != nil {
+			children = append(children, *schema.Else)
+		}
+		for _, child := range schema.DependentSchemas {
+			children = append(children, child)
+		}
 
 		for _, child := range children {
 			refName := refName(child.Ref)
