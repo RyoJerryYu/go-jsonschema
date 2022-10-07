@@ -2,8 +2,11 @@ package main
 
 import (
 	"encoding/json"
+	"flag"
+	"fmt"
 	"log"
 	"os"
+	"path/filepath"
 	"sort"
 	"strings"
 	"unicode"
@@ -232,16 +235,41 @@ func loadSchema(filename string) *jsonschema.Schema {
 	return &schema
 }
 
+const usage = `usage: jsonschemagen -s <schema> -o <output> [options...]
+
+Generate Go types and helpers for the specified JSON schema.
+
+Options:
+
+  -s <schema>    JSON schema filename. Required.
+  -o <output>    Output filename for generated Go code. Required.
+  -n <package>   Go package name, defaults to the dirname of the output file.
+`
+
 func main() {
-	if len(os.Args) != 4 {
-		log.Fatalf("usage: jsonschemagen <schema> <output> <package>")
+	var schemaFilename, outputFilename, pkgName string
+	flag.StringVar(&schemaFilename, "s", "", "schema filename")
+	flag.StringVar(&outputFilename, "o", "", "output filename")
+	flag.StringVar(&pkgName, "n", "", "package name")
+	flag.Usage = func() {
+		fmt.Fprintf(os.Stderr, usage)
+	}
+	flag.Parse()
+
+	if schemaFilename == "" || outputFilename == "" || len(flag.Args()) > 0 {
+		flag.Usage()
+		os.Exit(1)
 	}
 
-	inputFilename := os.Args[1]
-	outputFilename := os.Args[2]
-	pkgName := os.Args[3]
+	if pkgName == "" {
+		abs, err := filepath.Abs(outputFilename)
+		if err != nil {
+			log.Fatalf("failed to get absolute output filename: %v", err)
+		}
+		pkgName = filepath.Base(filepath.Dir(abs))
+	}
 
-	schema := loadSchema(inputFilename)
+	schema := loadSchema(schemaFilename)
 	f := jen.NewFile(pkgName)
 
 	if schema.Ref == "" {

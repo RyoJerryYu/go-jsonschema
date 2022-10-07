@@ -4,7 +4,7 @@ A JSON schema code generator for Go.
 
 ## Usage
 
-    jsonschemagen <schema> <output> <package>
+    jsonschemagen -s <schema> -o <output>
 
 ## License
 
