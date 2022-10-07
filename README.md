@@ -1,6 +1,6 @@
 # go-jsonschema
 
-A JSON schema code generator for Go.
+A [JSON schema] code generator for Go.
 
 ## Usage
 
@@ -18,3 +18,5 @@ One Go type per definition will be generated.
 ## License
 
 MIT
+
+[JSON schema]: https://json-schema.org/
