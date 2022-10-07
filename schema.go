@@ -92,7 +92,7 @@ type Schema struct {
 
 func (schema *Schema) UnmarshalJSON(b []byte) error {
 	if bytes.Equal(b, []byte("true")) {
-		// Nothing to do
+		*schema = Schema{}
 	} else if bytes.Equal(b, []byte("false")) {
 		*schema = Schema{Not: []Schema{
 			Schema{},
