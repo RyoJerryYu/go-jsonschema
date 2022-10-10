@@ -2,6 +2,8 @@
 
 A [JSON schema] code generator for Go.
 
+JSON schema draft 2020-12 is supported.
+
 ## Usage
 
     jsonschemagen -s <schema> -o <output>
