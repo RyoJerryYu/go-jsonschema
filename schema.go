@@ -17,6 +17,25 @@ const (
 	TypeInteger Type = "integer"
 )
 
+type TypeSet []Type
+
+func (ts *TypeSet) UnmarshalJSON(b []byte) error {
+	if b[0] == '[' {
+		type rawTypeSet TypeSet
+		out := (*rawTypeSet)(ts)
+		return json.Unmarshal(b, out)
+	} else {
+		var t Type
+		err := json.Unmarshal(b, &t)
+		if err != nil {
+			*ts = nil
+		} else {
+			*ts = []Type{t}
+		}
+		return err
+	}
+}
+
 type Schema struct {
 	// Core
 	Schema     string            `json:"$schema"`
@@ -51,7 +70,7 @@ type Schema struct {
 	PropertyNames        *Schema           `json:"propertyNames"`
 
 	// Validation
-	Type  Type          `json:"type"`
+	Type  TypeSet       `json:"type"`
 	Enum  []interface{} `json:"enum"`
 	Const interface{}   `json:"const"`
 

@@ -52,8 +52,11 @@ func resolveRef(def *jsonschema.Schema, root *jsonschema.Schema) *jsonschema.Sch
 }
 
 func schemaType(schema *jsonschema.Schema) jsonschema.Type {
-	if schema.Type != "" {
-		return schema.Type
+	switch {
+	case len(schema.Type) == 1:
+		return schema.Type[0]
+	case len(schema.Type) > 0:
+		return ""
 	}
 
 	var v interface{}
