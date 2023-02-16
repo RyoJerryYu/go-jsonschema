@@ -17,8 +17,15 @@ One Go type per definition will be generated.
   generated for `allOf`, `anyOf`, `oneOf`, `then`, `else` and `dependantSchemas`
   which are references.
 
+## Contributing
+
+Report bugs and send patches to the [mailing list]. Discuss in [#emersion] on
+Libera Chat.
+
 ## License
 
 MIT
 
 [JSON schema]: https://json-schema.org/
+[mailing list]: https://lists.sr.ht/~emersion/public-inbox
+[#emersion]: ircs://irc.libera.chat/#emersion
