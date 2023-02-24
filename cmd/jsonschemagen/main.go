@@ -128,6 +128,37 @@ func noAdditionalProps(schema *jsonschema.Schema) bool {
 	return schema.AdditionalProperties != nil && schema.AdditionalProperties.IsFalse()
 }
 
+// unwrapNullableSchema unwraps a schema in the form:
+//
+//	{
+//		"oneOf": {
+//			{ "type": "null" },
+//			<sub-schema>
+//		}
+//	}
+func unwrapNullableSchema(schema *jsonschema.Schema) (*jsonschema.Schema, bool) {
+	for _, choices := range [][]jsonschema.Schema{schema.AnyOf, schema.OneOf} {
+		if len(choices) != 2 {
+			continue
+		}
+
+		nullIndex := -1
+		for i, choice := range choices {
+			if len(choice.Type) == 1 && choice.Type[0] == jsonschema.TypeNull {
+				nullIndex = i
+				break
+			}
+		}
+		if nullIndex < 0 {
+			continue
+		}
+
+		otherIndex := (nullIndex + 1) % 2
+		return &choices[otherIndex], true
+	}
+	return nil, false
+}
+
 func generateSchemaType(schema *jsonschema.Schema, root *jsonschema.Schema, required bool) jen.Code {
 	if schema == nil {
 		return jen.Interface()
@@ -141,6 +172,10 @@ func generateSchemaType(schema *jsonschema.Schema, root *jsonschema.Schema, requ
 			t = jen.Op("*").Add(t)
 		}
 		return t
+	}
+
+	if subschema, ok := unwrapNullableSchema(schema); ok {
+		return jen.Op("*").Add(generateSchemaType(subschema, root, true))
 	}
 
 	switch schemaType(schema) {
