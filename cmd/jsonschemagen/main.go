@@ -161,7 +161,7 @@ func unwrapNullableSchema(schema *jsonschema.Schema) (*jsonschema.Schema, bool) 
 
 func generateSchemaType(schema *jsonschema.Schema, root *jsonschema.Schema, required bool) jen.Code {
 	if schema == nil {
-		return jen.Interface()
+		schema = &jsonschema.Schema{}
 	}
 
 	refName := refName(schema.Ref)
