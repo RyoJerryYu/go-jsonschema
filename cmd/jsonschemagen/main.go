@@ -125,7 +125,7 @@ func singlePatternProp(schema *jsonschema.Schema) *jsonschema.Schema {
 }
 
 func noAdditionalProps(schema *jsonschema.Schema) bool {
-	return schema.AdditionalProperties != nil && schema.AdditionalProperties.IsFalse()
+	return schema.AdditionalProperties == nil || schema.AdditionalProperties.IsFalse()
 }
 
 // unwrapNullableSchema unwraps a schema in the form:
