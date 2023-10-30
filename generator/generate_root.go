@@ -1,8 +1,6 @@
-package main
+package generator
 
 import (
-	"encoding/json"
-	"io"
 	"log"
 	"sort"
 	"strings"
@@ -12,13 +10,24 @@ import (
 	"github.com/dave/jennifer/jen"
 )
 
-func loadSchema(in io.Reader) *jsonschema.Schema {
-	var schema jsonschema.Schema
-	if err := json.NewDecoder(in).Decode(&schema); err != nil {
-		log.Fatalf("failed to load schema JSON: %v", err)
+// GenerateRoot generates the root struct and all its children
+//
+//	schema: the inputed root schema
+//	f: the result root go AST, which may render to a file, is a return value
+func GenerateRoot(schema *jsonschema.Schema, f *jen.File) {
+	if schema.Ref == "" {
+		generateDef(schema, schema, f, formatRootStructName(schema))
 	}
 
-	return &schema
+	var names []string
+	for name := range schema.Defs {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+	for _, name := range names {
+		def := schema.Defs[name]
+		generateDef(&def, schema, f, name)
+	}
 }
 
 func formatRootStructName(schema *jsonschema.Schema) string {

@@ -2,6 +2,8 @@ package jsonschema
 
 import (
 	"encoding/json"
+	"io"
+	"log"
 )
 
 type Type string
@@ -116,4 +118,13 @@ func (schema *Schema) UnmarshalJSON(b []byte) error {
 	}
 	*schema = Schema(out)
 	return nil
+}
+
+func LoadSchema(in io.Reader) *Schema {
+	var schema Schema
+	if err := json.NewDecoder(in).Decode(&schema); err != nil {
+		log.Fatalf("failed to load schema JSON: %v", err)
+	}
+
+	return &schema
 }

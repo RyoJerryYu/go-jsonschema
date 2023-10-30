@@ -7,9 +7,10 @@ import (
 	"log"
 	"os"
 	"path/filepath"
-	"sort"
 	"strings"
 
+	"git.sr.ht/~emersion/go-jsonschema"
+	"git.sr.ht/~emersion/go-jsonschema/generator"
 	"github.com/dave/jennifer/jen"
 )
 
@@ -87,7 +88,7 @@ func (f *Flags) Format() error {
 	return nil
 }
 
-func (f *Flags) Input() (io.ReadCloser, error) {
+func (f *Flags) PipeIn() (io.ReadCloser, error) {
 	if f.isStdin() {
 		return os.Stdin, nil
 	}
@@ -99,7 +100,7 @@ func (f *Flags) Input() (io.ReadCloser, error) {
 	return r, nil
 }
 
-func (f *Flags) Output() (io.WriteCloser, error) {
+func (f *Flags) PipeOut() (io.WriteCloser, error) {
 	if f.isStdout() {
 		return os.Stdout, nil
 	}
@@ -114,36 +115,24 @@ func (f *Flags) Output() (io.WriteCloser, error) {
 func main() {
 	flags := LoadFlags()
 
-	input, err := flags.Input()
+	pipeIn, err := flags.PipeIn()
 	if err != nil {
 		log.Fatalf("failed to open schema file: %v", err)
 	}
-	defer input.Close()
+	defer pipeIn.Close()
 
-	schema := loadSchema(input)
+	schema := jsonschema.LoadSchema(pipeIn)
 	f := jen.NewFile(flags.PkgName)
 
-	if schema.Ref == "" {
-		generateDef(schema, schema, f, formatRootStructName(schema))
-	}
+	generator.GenerateRoot(schema, f)
 
-	var names []string
-	for name := range schema.Defs {
-		names = append(names, name)
-	}
-	sort.Strings(names)
-	for _, name := range names {
-		def := schema.Defs[name]
-		generateDef(&def, schema, f, name)
-	}
-
-	output, err := flags.Output()
+	pipeOut, err := flags.PipeOut()
 	if err != nil {
 		log.Fatalf("failed to open output file: %v", err)
 	}
-	defer output.Close()
+	defer pipeOut.Close()
 
-	if err := f.Render(output); err != nil {
+	if err := f.Render(pipeOut); err != nil {
 		log.Fatalf("failed to render output file: %v", err)
 	}
 }
