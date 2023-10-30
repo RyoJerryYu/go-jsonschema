@@ -1,314 +1,17 @@
 package main
 
 import (
-	"encoding/json"
 	"flag"
 	"fmt"
+	"io"
 	"log"
 	"os"
 	"path/filepath"
 	"sort"
 	"strings"
-	"unicode"
 
 	"github.com/dave/jennifer/jen"
-
-	"git.sr.ht/~emersion/go-jsonschema"
 )
-
-func formatId(s string) string {
-	fields := strings.FieldsFunc(s, func(c rune) bool {
-		return !unicode.IsLetter(c) && !unicode.IsNumber(c)
-	})
-	for i, v := range fields {
-		fields[i] = strings.Title(v)
-	}
-	return strings.Join(fields, "")
-}
-
-func refName(ref string) string {
-	prefix := "#/$defs/"
-	if !strings.HasPrefix(ref, prefix) {
-		return ""
-	}
-	return strings.TrimPrefix(ref, prefix)
-}
-
-func resolveRef(def *jsonschema.Schema, root *jsonschema.Schema) *jsonschema.Schema {
-	if def.Ref == "" {
-		return def
-	}
-
-	name := refName(def.Ref)
-	if name == "" {
-		log.Fatalf("unsupported $ref %q", def.Ref)
-	}
-
-	result, ok := root.Defs[name]
-	if !ok {
-		log.Fatalf("invalid $ref %q", def.Ref)
-	}
-	return &result
-}
-
-func schemaType(schema *jsonschema.Schema) jsonschema.Type {
-	switch {
-	case len(schema.Type) == 1:
-		return schema.Type[0]
-	case len(schema.Type) > 0:
-		return ""
-	}
-
-	var v interface{}
-	if schema.Const != nil {
-		v = schema.Const
-	} else if len(schema.Enum) > 0 {
-		v = schema.Enum[0]
-	}
-
-	switch v.(type) {
-	case bool:
-		return jsonschema.TypeBoolean
-	case map[string]interface{}:
-		return jsonschema.TypeObject
-	case []interface{}:
-		return jsonschema.TypeArray
-	case float64:
-		return jsonschema.TypeNumber
-	case string:
-		return jsonschema.TypeString
-	default:
-		return ""
-	}
-}
-
-func isRequired(schema *jsonschema.Schema, propName string) bool {
-	for _, name := range schema.Required {
-		if name == propName {
-			return true
-		}
-	}
-	return false
-}
-
-func generateStruct(schema *jsonschema.Schema, root *jsonschema.Schema) jen.Code {
-	var names []string
-	for name := range schema.Properties {
-		names = append(names, name)
-	}
-	sort.Strings(names)
-
-	var fields []jen.Code
-	for _, name := range names {
-		prop := schema.Properties[name]
-		id := formatId(name)
-		required := isRequired(schema, name)
-		t := generateSchemaType(&prop, root, required)
-		jsonTag := name
-		if !required {
-			jsonTag += ",omitempty"
-		}
-		tags := map[string]string{"json": jsonTag}
-		fields = append(fields, jen.Id(id).Add(t).Tag(tags))
-	}
-	noAdditionalProps := noAdditionalProps(schema)
-	noPatternProps := len(schema.PatternProperties) == 0
-
-	if noAdditionalProps && noPatternProps {
-		return jen.Struct(fields...) // No additional properties, early return
-	}
-
-	additionPropsId := formatId("other-props")
-	additionPropsT := jen.Map(jen.String()).Add(jen.Qual("encoding/json", "RawMessage"))
-	additionPropsTags := map[string]string{"json": "-"}
-
-	if patternProp := singlePatternProp(schema); noAdditionalProps && patternProp != nil {
-		// Only one pattern properties, use the pattern type
-		additionPropsT = jen.Map(jen.String()).Add(generateSchemaType(patternProp, root, true))
-	} else if schema.AdditionalProperties.IsSchema() && noPatternProps {
-		// Only additional properties, use the additional properties type
-		prop := schema.AdditionalProperties.Schema
-		additionPropsT = jen.Map(jen.String()).Add(generateSchemaType(prop, root, true))
-	}
-	fields = append(fields,
-		jen.Line(),
-		jen.Comment("Additional properties, not valided now"),
-		jen.Id(additionPropsId).
-			Add(additionPropsT).
-			Tag(additionPropsTags),
-	)
-	return jen.Struct(fields...)
-}
-
-func singlePatternProp(schema *jsonschema.Schema) *jsonschema.Schema {
-	if len(schema.PatternProperties) != 1 {
-		return nil
-	}
-	for _, prop := range schema.PatternProperties {
-		return &prop
-	}
-	return nil
-}
-
-func noAdditionalProps(schema *jsonschema.Schema) bool {
-	return schema.AdditionalProperties != nil && schema.AdditionalProperties.IsFalse()
-}
-
-// unwrapNullableSchema unwraps a schema in the form:
-//
-//	{
-//		"oneOf": {
-//			{ "type": "null" },
-//			<sub-schema>
-//		}
-//	}
-func unwrapNullableSchema(schema *jsonschema.Schema) (*jsonschema.Schema, bool) {
-	for _, choices := range [][]jsonschema.Schema{schema.AnyOf, schema.OneOf} {
-		if len(choices) != 2 {
-			continue
-		}
-
-		nullIndex := -1
-		for i, choice := range choices {
-			if len(choice.Type) == 1 && choice.Type[0] == jsonschema.TypeNull {
-				nullIndex = i
-				break
-			}
-		}
-		if nullIndex < 0 {
-			continue
-		}
-
-		otherIndex := (nullIndex + 1) % 2
-		return &choices[otherIndex], true
-	}
-	return nil, false
-}
-
-func generateSchemaType(schema *jsonschema.Schema, root *jsonschema.Schema, required bool) jen.Code {
-	if schema == nil {
-		schema = &jsonschema.Schema{}
-	}
-
-	refName := refName(schema.Ref)
-	if refName != "" {
-		schema = resolveRef(schema, root)
-		t := jen.Id(formatId(refName))
-		if !required && schemaType(schema) == jsonschema.TypeObject && noAdditionalProps(schema) && len(schema.PatternProperties) == 0 {
-			t = jen.Op("*").Add(t)
-		}
-		return t
-	}
-
-	if subschema, ok := unwrapNullableSchema(schema); ok {
-		return jen.Op("*").Add(generateSchemaType(subschema, root, true))
-	}
-
-	switch schemaType(schema) {
-	case jsonschema.TypeNull:
-		return jen.Struct()
-	case jsonschema.TypeBoolean:
-		return jen.Bool()
-	case jsonschema.TypeArray:
-		return jen.Index().Add(generateSchemaType(schema.Items, root, required))
-	case jsonschema.TypeNumber:
-		return jen.Qual("encoding/json", "Number")
-	case jsonschema.TypeString:
-		return jen.String()
-	case jsonschema.TypeInteger:
-		return jen.Int64()
-	case jsonschema.TypeObject:
-		t := generateStruct(schema, root)
-		if !required {
-			t = jen.Op("*").Add(t)
-		}
-		return t
-	default:
-		return jen.Qual("encoding/json", "RawMessage")
-	}
-}
-
-func generateDef(schema *jsonschema.Schema, root *jsonschema.Schema, f *jen.File, name string) {
-	id := formatId(name)
-
-	if schema.Ref == "" && schemaType(schema) == "" {
-		f.Type().Id(id).Struct(
-			jen.Qual("encoding/json", "RawMessage"),
-		).Line()
-
-		var children []jsonschema.Schema
-		for _, child := range schema.AllOf {
-			children = append(children, child)
-		}
-		for _, child := range schema.AnyOf {
-			children = append(children, child)
-		}
-		for _, child := range schema.OneOf {
-			children = append(children, child)
-		}
-		if schema.Then != nil {
-			children = append(children, *schema.Then)
-		}
-		if schema.Else != nil {
-			children = append(children, *schema.Else)
-		}
-		for _, child := range schema.DependentSchemas {
-			children = append(children, child)
-		}
-
-		for _, child := range children {
-			refName := refName(child.Ref)
-			if refName == "" {
-				continue
-			}
-
-			t := generateSchemaType(&child, root, false)
-
-			f.Func().Params(
-				jen.Id("v").Id(id),
-			).Id(formatId(refName)).Params().Params(
-				t,
-				jen.Id("error"),
-			).Block(
-				jen.Var().Id("out").Add(t),
-				jen.Id("err").Op(":=").Qual("encoding/json", "Unmarshal").Params(
-					jen.Id("v").Op(".").Id("RawMessage"),
-					jen.Op("&").Id("out"),
-				),
-				jen.Return(
-					jen.Id("out"),
-					jen.Id("err"),
-				),
-			).Line()
-		}
-	} else {
-		f.Type().Id(id).Add(generateSchemaType(schema, root, true)).Line()
-	}
-}
-
-func loadSchema(filename string) *jsonschema.Schema {
-	f, err := os.Open(filename)
-	if err != nil {
-		log.Fatalf("failed to open schema file: %v", err)
-	}
-	defer f.Close()
-
-	var schema jsonschema.Schema
-	if err := json.NewDecoder(f).Decode(&schema); err != nil {
-		log.Fatalf("failed to load schema JSON: %v", err)
-	}
-
-	return &schema
-}
-
-func formatOutputFilename(filename string) string {
-	abs, err := filepath.Abs(filename)
-	if err != nil {
-		log.Fatalf("failed to get absolute filename: %v", err)
-	}
-
-	return strings.Replace(abs, "$", "", -1)
-}
 
 const usage = `usage: jsonschemagen -s <schema> -o <output> [options...]
 
@@ -321,32 +24,107 @@ Options:
   -n <package>   Go package name, defaults to the dirname of the output file.
 `
 
-func main() {
-	var schemaFilename, outputFilename, pkgName string
-	flag.StringVar(&schemaFilename, "s", "", "schema filename")
-	flag.StringVar(&outputFilename, "o", "", "output filename")
-	flag.StringVar(&pkgName, "n", "", "package name")
-	flag.Usage = func() {
-		fmt.Fprintf(os.Stderr, usage)
-	}
-	flag.Parse()
+type Flags struct {
+	SchemaFilename string
+	OutputFilename string
+	PkgName        string
+	// Args           []string
+}
 
-	if schemaFilename == "" || outputFilename == "" || len(flag.Args()) > 0 {
+func LoadFlags() *Flags {
+	f := &Flags{}
+	flag.StringVar(&f.SchemaFilename, "s", "", "schema filename")
+	flag.StringVar(&f.OutputFilename, "o", "", "output filename")
+	flag.StringVar(&f.PkgName, "n", "", "package name")
+
+	flag.Usage = func() {
+		fmt.Fprint(os.Stderr, usage)
+	}
+
+	flag.Parse()
+	// f.Args = flag.Args()
+
+	if err := f.Format(); err != nil {
+		fmt.Fprintf(os.Stderr, "invalid arguments: %v", err)
 		flag.Usage()
 		os.Exit(1)
 	}
 
-	outputFilename = formatOutputFilename(outputFilename)
+	return f
+}
 
-	if pkgName == "" {
-		pkgName = filepath.Base(filepath.Dir(outputFilename))
+func (f *Flags) formatOutputFilename(filename string) string {
+	abs, err := filepath.Abs(filename)
+	if err != nil {
+		log.Fatalf("failed to get absolute filename: %v", err)
 	}
 
-	schema := loadSchema(schemaFilename)
-	f := jen.NewFile(pkgName)
+	return strings.Replace(abs, "$", "", -1)
+}
+
+func (f *Flags) isStdin() bool {
+	return f.SchemaFilename == ""
+}
+func (f *Flags) isStdout() bool {
+	return f.OutputFilename == ""
+}
+
+func (f *Flags) Format() error {
+	if f.SchemaFilename == "-" {
+		f.SchemaFilename = "" // stdin
+	}
+	if f.OutputFilename == "-" {
+		f.OutputFilename = "" // stdout
+	}
+
+	if !f.isStdout() {
+		f.OutputFilename = f.formatOutputFilename(f.OutputFilename)
+	}
+	if f.PkgName == "" {
+		f.PkgName = filepath.Base(filepath.Dir(f.OutputFilename))
+	}
+
+	return nil
+}
+
+func (f *Flags) Input() (io.ReadCloser, error) {
+	if f.isStdin() {
+		return os.Stdin, nil
+	}
+
+	r, err := os.Open(f.SchemaFilename)
+	if err != nil {
+		return nil, err
+	}
+	return r, nil
+}
+
+func (f *Flags) Output() (io.WriteCloser, error) {
+	if f.isStdout() {
+		return os.Stdout, nil
+	}
+
+	w, err := os.Create(f.OutputFilename)
+	if err != nil {
+		return nil, err
+	}
+	return w, nil
+}
+
+func main() {
+	flags := LoadFlags()
+
+	input, err := flags.Input()
+	if err != nil {
+		log.Fatalf("failed to open schema file: %v", err)
+	}
+	defer input.Close()
+
+	schema := loadSchema(input)
+	f := jen.NewFile(flags.PkgName)
 
 	if schema.Ref == "" {
-		generateDef(schema, schema, f, "root")
+		generateDef(schema, schema, f, formatRootStructName(schema))
 	}
 
 	var names []string
@@ -359,7 +137,13 @@ func main() {
 		generateDef(&def, schema, f, name)
 	}
 
-	if err := f.Save(outputFilename); err != nil {
-		log.Fatalf("failed to save output file: %v", err)
+	output, err := flags.Output()
+	if err != nil {
+		log.Fatalf("failed to open output file: %v", err)
+	}
+	defer output.Close()
+
+	if err := f.Render(output); err != nil {
+		log.Fatalf("failed to render output file: %v", err)
 	}
 }
