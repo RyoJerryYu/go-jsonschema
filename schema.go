@@ -1,7 +1,6 @@
 package jsonschema
 
 import (
-	"bytes"
 	"encoding/json"
 )
 
@@ -64,10 +63,10 @@ type Schema struct {
 	Contains    *Schema  `json:"contains"`
 
 	// Applying subschemas to objects
-	Properties           map[string]Schema `json:"properties"`
-	PatternProperties    map[string]Schema `json:"patternProperties"`
-	AdditionalProperties *Schema           `json:"additionalProperties"`
-	PropertyNames        *Schema           `json:"propertyNames"`
+	Properties           map[string]Schema     `json:"properties"`
+	PatternProperties    map[string]Schema     `json:"patternProperties"`
+	AdditionalProperties *AdditionalProperties `json:"additionalProperties"`
+	PropertyNames        *Schema               `json:"propertyNames"`
 
 	// Validation
 	Type  TypeSet       `json:"type"`
@@ -110,32 +109,11 @@ type Schema struct {
 }
 
 func (schema *Schema) UnmarshalJSON(b []byte) error {
-	if bytes.Equal(b, []byte("true")) {
-		*schema = Schema{}
-	} else if bytes.Equal(b, []byte("false")) {
-		*schema = Schema{Not: []Schema{
-			{},
-		}}
-	} else {
-		type rawSchema Schema
-		var out rawSchema
-		if err := json.Unmarshal(b, &out); err != nil {
-			return err
-		}
-		*schema = Schema(out)
+	type rawSchema Schema
+	var out rawSchema
+	if err := json.Unmarshal(b, &out); err != nil {
+		return err
 	}
+	*schema = Schema(out)
 	return nil
-}
-
-func (schema *Schema) IsTrue() bool {
-	return len(schema.AllOf) == 0 && len(schema.AnyOf) == 0 && len(schema.OneOf) == 0 && len(schema.Not) == 0 && schema.If == nil && schema.Then == nil && schema.Else == nil && len(schema.DependentSchemas) == 0 && len(schema.PrefixItems) == 0 && schema.Items == nil && schema.Contains == nil && len(schema.Properties) == 0 && len(schema.PatternProperties) == 0 && schema.AdditionalProperties == nil && schema.PropertyNames == nil
-}
-
-func (schema *Schema) IsFalse() bool {
-	for _, not := range schema.Not {
-		if not.IsTrue() {
-			return true
-		}
-	}
-	return false
 }

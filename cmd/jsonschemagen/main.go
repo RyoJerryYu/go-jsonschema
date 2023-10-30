@@ -111,6 +111,32 @@ func generateStruct(schema *jsonschema.Schema, root *jsonschema.Schema) jen.Code
 		tags := map[string]string{"json": jsonTag}
 		fields = append(fields, jen.Id(id).Add(t).Tag(tags))
 	}
+	noAdditionalProps := noAdditionalProps(schema)
+	noPatternProps := len(schema.PatternProperties) == 0
+
+	if noAdditionalProps && noPatternProps {
+		return jen.Struct(fields...) // No additional properties, early return
+	}
+
+	additionPropsId := formatId("other-props")
+	additionPropsT := jen.Map(jen.String()).Add(jen.Qual("encoding/json", "RawMessage"))
+	additionPropsTags := map[string]string{"json": "-"}
+
+	if patternProp := singlePatternProp(schema); noAdditionalProps && patternProp != nil {
+		// Only one pattern properties, use the pattern type
+		additionPropsT = jen.Map(jen.String()).Add(generateSchemaType(patternProp, root, true))
+	} else if schema.AdditionalProperties.IsSchema() && noPatternProps {
+		// Only additional properties, use the additional properties type
+		prop := schema.AdditionalProperties.Schema
+		additionPropsT = jen.Map(jen.String()).Add(generateSchemaType(prop, root, true))
+	}
+	fields = append(fields,
+		jen.Line(),
+		jen.Comment("Additional properties, not valided now"),
+		jen.Id(additionPropsId).
+			Add(additionPropsT).
+			Tag(additionPropsTags),
+	)
 	return jen.Struct(fields...)
 }
 
@@ -125,7 +151,7 @@ func singlePatternProp(schema *jsonschema.Schema) *jsonschema.Schema {
 }
 
 func noAdditionalProps(schema *jsonschema.Schema) bool {
-	return schema.AdditionalProperties == nil || schema.AdditionalProperties.IsFalse()
+	return schema.AdditionalProperties != nil && schema.AdditionalProperties.IsFalse()
 }
 
 // unwrapNullableSchema unwraps a schema in the form:
@@ -192,18 +218,11 @@ func generateSchemaType(schema *jsonschema.Schema, root *jsonschema.Schema, requ
 	case jsonschema.TypeInteger:
 		return jen.Int64()
 	case jsonschema.TypeObject:
-		noAdditionalProps := noAdditionalProps(schema)
-		if noAdditionalProps && len(schema.PatternProperties) == 0 {
-			t := generateStruct(schema, root)
-			if !required {
-				t = jen.Op("*").Add(t)
-			}
-			return t
-		} else if patternProp := singlePatternProp(schema); noAdditionalProps && patternProp != nil {
-			return jen.Map(jen.String()).Add(generateSchemaType(patternProp, root, true))
-		} else {
-			return jen.Map(jen.String()).Add(generateSchemaType(schema.AdditionalProperties, root, true))
+		t := generateStruct(schema, root)
+		if !required {
+			t = jen.Op("*").Add(t)
 		}
+		return t
 	default:
 		return jen.Qual("encoding/json", "RawMessage")
 	}
