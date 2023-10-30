@@ -8,6 +8,8 @@ import (
 
 	"git.sr.ht/~emersion/go-jsonschema"
 	"github.com/dave/jennifer/jen"
+	"golang.org/x/text/cases"
+	"golang.org/x/text/language"
 )
 
 // GenerateRoot generates the root struct and all its children
@@ -15,8 +17,12 @@ import (
 //	schema: the inputed root schema
 //	f: the result root go AST, which may render to a file, is a return value
 func GenerateRoot(schema *jsonschema.Schema, f *jen.File) {
+	generator := &Generator{
+		root: schema,
+		file: f,
+	}
 	if schema.Ref == "" {
-		generateDef(schema, schema, f, formatRootStructName(schema))
+		generator.generateDef(schema, formatRootStructName(schema))
 	}
 
 	var names []string
@@ -26,8 +32,13 @@ func GenerateRoot(schema *jsonschema.Schema, f *jen.File) {
 	sort.Strings(names)
 	for _, name := range names {
 		def := schema.Defs[name]
-		generateDef(&def, schema, f, name)
+		generator.generateDef(&def, name)
 	}
+}
+
+type Generator struct {
+	root *jsonschema.Schema
+	file *jen.File
 }
 
 func formatRootStructName(schema *jsonschema.Schema) string {
@@ -43,7 +54,7 @@ func formatId(s string) string {
 		return !unicode.IsLetter(c) && !unicode.IsNumber(c)
 	})
 	for i, v := range fields {
-		fields[i] = strings.Title(v)
+		fields[i] = cases.Title(language.Und).String(v)
 	}
 	return strings.Join(fields, "")
 }
@@ -56,7 +67,7 @@ func refName(ref string) string {
 	return strings.TrimPrefix(ref, prefix)
 }
 
-func resolveRef(def *jsonschema.Schema, root *jsonschema.Schema) *jsonschema.Schema {
+func (g *Generator) resolveRef(def *jsonschema.Schema) *jsonschema.Schema {
 	if def.Ref == "" {
 		return def
 	}
@@ -66,54 +77,14 @@ func resolveRef(def *jsonschema.Schema, root *jsonschema.Schema) *jsonschema.Sch
 		log.Fatalf("unsupported $ref %q", def.Ref)
 	}
 
-	result, ok := root.Defs[name]
+	result, ok := g.root.Defs[name]
 	if !ok {
 		log.Fatalf("invalid $ref %q", def.Ref)
 	}
 	return &result
 }
 
-func schemaType(schema *jsonschema.Schema) jsonschema.Type {
-	switch {
-	case len(schema.Type) == 1:
-		return schema.Type[0]
-	case len(schema.Type) > 0:
-		return ""
-	}
-
-	var v interface{}
-	if schema.Const != nil {
-		v = schema.Const
-	} else if len(schema.Enum) > 0 {
-		v = schema.Enum[0]
-	}
-
-	switch v.(type) {
-	case bool:
-		return jsonschema.TypeBoolean
-	case map[string]interface{}:
-		return jsonschema.TypeObject
-	case []interface{}:
-		return jsonschema.TypeArray
-	case float64:
-		return jsonschema.TypeNumber
-	case string:
-		return jsonschema.TypeString
-	default:
-		return ""
-	}
-}
-
-func isRequired(schema *jsonschema.Schema, propName string) bool {
-	for _, name := range schema.Required {
-		if name == propName {
-			return true
-		}
-	}
-	return false
-}
-
-func generateStruct(schema *jsonschema.Schema, root *jsonschema.Schema) jen.Code {
+func (g *Generator) generateStruct(schema *jsonschema.Schema) jen.Code {
 	var names []string
 	for name := range schema.Properties {
 		names = append(names, name)
@@ -124,8 +95,8 @@ func generateStruct(schema *jsonschema.Schema, root *jsonschema.Schema) jen.Code
 	for _, name := range names {
 		prop := schema.Properties[name]
 		id := formatId(name)
-		required := isRequired(schema, name)
-		t := generateSchemaType(&prop, root, required)
+		required := schema.IsRequired(name)
+		t := g.generateSchemaType(&prop, required)
 		jsonTag := name
 		if !required {
 			jsonTag += ",omitempty"
@@ -133,7 +104,7 @@ func generateStruct(schema *jsonschema.Schema, root *jsonschema.Schema) jen.Code
 		tags := map[string]string{"json": jsonTag}
 		fields = append(fields, jen.Id(id).Add(t).Tag(tags))
 	}
-	noAdditionalProps := noAdditionalProps(schema)
+	noAdditionalProps := schema.NoAdditionalProps()
 	noPatternProps := len(schema.PatternProperties) == 0
 
 	if noAdditionalProps && noPatternProps {
@@ -144,13 +115,13 @@ func generateStruct(schema *jsonschema.Schema, root *jsonschema.Schema) jen.Code
 	additionPropsT := jen.Map(jen.String()).Add(jen.Qual("encoding/json", "RawMessage"))
 	additionPropsTags := map[string]string{"json": "-"}
 
-	if patternProp := singlePatternProp(schema); noAdditionalProps && patternProp != nil {
+	if patternProp := schema.SinglePatternProp(); noAdditionalProps && patternProp != nil {
 		// Only one pattern properties, use the pattern type
-		additionPropsT = jen.Map(jen.String()).Add(generateSchemaType(patternProp, root, true))
+		additionPropsT = jen.Map(jen.String()).Add(g.generateSchemaType(patternProp, true))
 	} else if schema.AdditionalProperties.IsSchema() && noPatternProps {
 		// Only additional properties, use the additional properties type
 		prop := schema.AdditionalProperties.Schema
-		additionPropsT = jen.Map(jen.String()).Add(generateSchemaType(prop, root, true))
+		additionPropsT = jen.Map(jen.String()).Add(g.generateSchemaType(prop, true))
 	}
 	fields = append(fields,
 		jen.Line(),
@@ -162,77 +133,32 @@ func generateStruct(schema *jsonschema.Schema, root *jsonschema.Schema) jen.Code
 	return jen.Struct(fields...)
 }
 
-func singlePatternProp(schema *jsonschema.Schema) *jsonschema.Schema {
-	if len(schema.PatternProperties) != 1 {
-		return nil
-	}
-	for _, prop := range schema.PatternProperties {
-		return &prop
-	}
-	return nil
-}
-
-func noAdditionalProps(schema *jsonschema.Schema) bool {
-	return schema.AdditionalProperties != nil && schema.AdditionalProperties.IsFalse()
-}
-
-// unwrapNullableSchema unwraps a schema in the form:
-//
-//	{
-//		"oneOf": {
-//			{ "type": "null" },
-//			<sub-schema>
-//		}
-//	}
-func unwrapNullableSchema(schema *jsonschema.Schema) (*jsonschema.Schema, bool) {
-	for _, choices := range [][]jsonschema.Schema{schema.AnyOf, schema.OneOf} {
-		if len(choices) != 2 {
-			continue
-		}
-
-		nullIndex := -1
-		for i, choice := range choices {
-			if len(choice.Type) == 1 && choice.Type[0] == jsonschema.TypeNull {
-				nullIndex = i
-				break
-			}
-		}
-		if nullIndex < 0 {
-			continue
-		}
-
-		otherIndex := (nullIndex + 1) % 2
-		return &choices[otherIndex], true
-	}
-	return nil, false
-}
-
-func generateSchemaType(schema *jsonschema.Schema, root *jsonschema.Schema, required bool) jen.Code {
+func (g *Generator) generateSchemaType(schema *jsonschema.Schema, required bool) jen.Code {
 	if schema == nil {
 		schema = &jsonschema.Schema{}
 	}
 
 	refName := refName(schema.Ref)
 	if refName != "" {
-		schema = resolveRef(schema, root)
+		schema = g.resolveRef(schema)
 		t := jen.Id(formatId(refName))
-		if !required && schemaType(schema) == jsonschema.TypeObject && noAdditionalProps(schema) && len(schema.PatternProperties) == 0 {
+		if !required && schema.SchemaType() == jsonschema.TypeObject && schema.NoAdditionalProps() && len(schema.PatternProperties) == 0 {
 			t = jen.Op("*").Add(t)
 		}
 		return t
 	}
 
-	if subschema, ok := unwrapNullableSchema(schema); ok {
-		return jen.Op("*").Add(generateSchemaType(subschema, root, true))
+	if subschema, ok := schema.UnwrapNullableSchema(); ok {
+		return jen.Op("*").Add(g.generateSchemaType(subschema, true))
 	}
 
-	switch schemaType(schema) {
+	switch schema.SchemaType() {
 	case jsonschema.TypeNull:
 		return jen.Struct()
 	case jsonschema.TypeBoolean:
 		return jen.Bool()
 	case jsonschema.TypeArray:
-		return jen.Index().Add(generateSchemaType(schema.Items, root, required))
+		return jen.Index().Add(g.generateSchemaType(schema.Items, required))
 	case jsonschema.TypeNumber:
 		return jen.Qual("encoding/json", "Number")
 	case jsonschema.TypeString:
@@ -240,7 +166,7 @@ func generateSchemaType(schema *jsonschema.Schema, root *jsonschema.Schema, requ
 	case jsonschema.TypeInteger:
 		return jen.Int64()
 	case jsonschema.TypeObject:
-		t := generateStruct(schema, root)
+		t := g.generateStruct(schema)
 		if !required {
 			t = jen.Op("*").Add(t)
 		}
@@ -250,11 +176,11 @@ func generateSchemaType(schema *jsonschema.Schema, root *jsonschema.Schema, requ
 	}
 }
 
-func generateDef(schema *jsonschema.Schema, root *jsonschema.Schema, f *jen.File, name string) {
+func (g *Generator) generateDef(schema *jsonschema.Schema, name string) {
 	id := formatId(name)
 
-	if schema.Ref == "" && schemaType(schema) == "" {
-		f.Type().Id(id).Struct(
+	if schema.Ref == "" && schema.SchemaType() == "" {
+		g.file.Type().Id(id).Struct(
 			jen.Qual("encoding/json", "RawMessage"),
 		).Line()
 
@@ -278,9 +204,9 @@ func generateDef(schema *jsonschema.Schema, root *jsonschema.Schema, f *jen.File
 				continue
 			}
 
-			t := generateSchemaType(&child, root, false)
+			t := g.generateSchemaType(&child, false)
 
-			f.Func().Params(
+			g.file.Func().Params(
 				jen.Id("v").Id(id),
 			).Id(formatId(refName)).Params().Params(
 				t,
@@ -298,6 +224,6 @@ func generateDef(schema *jsonschema.Schema, root *jsonschema.Schema, f *jen.File
 			).Line()
 		}
 	} else {
-		f.Type().Id(id).Add(generateSchemaType(schema, root, true)).Line()
+		g.file.Type().Id(id).Add(g.generateSchemaType(schema, true)).Line()
 	}
 }

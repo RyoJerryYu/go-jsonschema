@@ -128,3 +128,88 @@ func LoadSchema(in io.Reader) *Schema {
 
 	return &schema
 }
+
+func (schema *Schema) SchemaType() Type {
+	switch {
+	case len(schema.Type) == 1:
+		return schema.Type[0]
+	case len(schema.Type) > 0:
+		return ""
+	}
+
+	var v interface{}
+	if schema.Const != nil {
+		v = schema.Const
+	} else if len(schema.Enum) > 0 {
+		v = schema.Enum[0]
+	}
+
+	switch v.(type) {
+	case bool:
+		return TypeBoolean
+	case map[string]interface{}:
+		return TypeObject
+	case []interface{}:
+		return TypeArray
+	case float64:
+		return TypeNumber
+	case string:
+		return TypeString
+	default:
+		return ""
+	}
+}
+
+func (schema *Schema) IsRequired(propName string) bool {
+	for _, name := range schema.Required {
+		if name == propName {
+			return true
+		}
+	}
+	return false
+}
+
+func (schema *Schema) SinglePatternProp() *Schema {
+	if len(schema.PatternProperties) != 1 {
+		return nil
+	}
+	for _, prop := range schema.PatternProperties {
+		return &prop
+	}
+	return nil
+}
+
+func (schema *Schema) NoAdditionalProps() bool {
+	return schema.AdditionalProperties != nil && schema.AdditionalProperties.IsFalse()
+}
+
+// UnwrapNullableSchema unwraps a schema in the form:
+//
+//	{
+//		"oneOf": {
+//			{ "type": "null" },
+//			<sub-schema>
+//		}
+//	}
+func (schema *Schema) UnwrapNullableSchema() (*Schema, bool) {
+	for _, choices := range [][]Schema{schema.AnyOf, schema.OneOf} {
+		if len(choices) != 2 {
+			continue
+		}
+
+		nullIndex := -1
+		for i, choice := range choices {
+			if len(choice.Type) == 1 && choice.Type[0] == TypeNull {
+				nullIndex = i
+				break
+			}
+		}
+		if nullIndex < 0 {
+			continue
+		}
+
+		otherIndex := (nullIndex + 1) % 2
+		return &choices[otherIndex], true
+	}
+	return nil, false
+}
