@@ -47,7 +47,7 @@ lint: $(GOPATH)/bin/golint
 	golint -min_confidence=0.1 $(PKG)/...
 
 $(GOPATH)/bin/golint:
-	go get -v golang.org/x/lint/golint
+	go install golang.org/x/lint/golint@latest
 
 vet:
 	@echo "+ go vet"
