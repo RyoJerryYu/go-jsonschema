@@ -301,6 +301,15 @@ func loadSchema(filename string) *jsonschema.Schema {
 	return &schema
 }
 
+func formatOutputFilename(filename string) string {
+	abs, err := filepath.Abs(filename)
+	if err != nil {
+		log.Fatalf("failed to get absolute filename: %v", err)
+	}
+
+	return strings.Replace(abs, "$", "", -1)
+}
+
 const usage = `usage: jsonschemagen -s <schema> -o <output> [options...]
 
 Generate Go types and helpers for the specified JSON schema.
@@ -327,12 +336,10 @@ func main() {
 		os.Exit(1)
 	}
 
+	outputFilename = formatOutputFilename(outputFilename)
+
 	if pkgName == "" {
-		abs, err := filepath.Abs(outputFilename)
-		if err != nil {
-			log.Fatalf("failed to get absolute output filename: %v", err)
-		}
-		pkgName = filepath.Base(filepath.Dir(abs))
+		pkgName = filepath.Base(filepath.Dir(outputFilename))
 	}
 
 	schema := loadSchema(schemaFilename)
