@@ -114,7 +114,7 @@ func (schema *Schema) UnmarshalJSON(b []byte) error {
 		*schema = Schema{}
 	} else if bytes.Equal(b, []byte("false")) {
 		*schema = Schema{Not: []Schema{
-			Schema{},
+			{},
 		}}
 	} else {
 		type rawSchema Schema
