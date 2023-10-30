@@ -2,3 +2,6 @@
 /schema
 /.vscode
 /out
+/test/*_gen
+/jsonschemagen
+
