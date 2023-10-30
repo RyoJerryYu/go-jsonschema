@@ -20,7 +20,12 @@ func (ap *AdditionalProperties) UnmarshalJSON(b []byte) error {
 	} else if bytes.Equal(b, []byte("false")) {
 		*ap = AdditionalPropertiesBool(false)
 	} else {
-		return json.Unmarshal(b, ap.Schema)
+		s := &Schema{}
+		err := json.Unmarshal(b, s)
+		if err != nil {
+			return err
+		}
+		*ap = AdditionalProperties{s, nil}
 	}
 
 	return nil
