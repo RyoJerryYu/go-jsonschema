@@ -54,6 +54,10 @@ func (r *RefResolver) mapPaths(schema *jsonschema.Schema) error {
 		if err := r.insert(rootURI.String()+"#", schema); err != nil {
 			return err
 		}
+		// add as Path Resolution
+		if err := r.insert(rootURI.Path, schema); err != nil {
+			return err
+		}
 	}
 	r.updateURIs(schema, *rootURI, false, false)
 	return nil
@@ -90,7 +94,7 @@ func (r *RefResolver) updateURIs(schema *jsonschema.Schema, baseURI url.URL, che
 	}
 	for k, subSchema := range schema.Defs {
 		newBaseURI := baseURI
-		newBaseURI.Fragment += "/definitions/" + k
+		newBaseURI.Fragment += "/$defs/" + k
 		if err := r.insert(newBaseURI.String(), subSchema); err != nil {
 			return err
 		}

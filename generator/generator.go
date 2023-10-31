@@ -67,7 +67,7 @@ func NewGenerator(opts *GeneratorOptions, f *jen.File, schemas ...*jsonschema.Sc
 func refName(ref string) string {
 	prefix := "#/$defs/"
 	if !strings.HasPrefix(ref, prefix) {
-		return ""
+		return ref
 	}
 	return strings.TrimPrefix(ref, prefix)
 }
@@ -137,7 +137,7 @@ func (g *Generator) generateSchemaType(schema *jsonschema.Schema, required bool)
 		if err != nil {
 			return jen.Qual("encoding/json", "RawMessage")
 		}
-		t := jen.Id(toGolangName(refName))
+		t := jen.Id(SchemaTypeName(schema))
 		if !required && schema.SchemaType() == jsonschema.TypeObject && schema.NoAdditionalProps() && len(schema.PatternProperties) == 0 {
 			t = jen.Op("*").Add(t)
 		}
