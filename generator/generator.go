@@ -13,9 +13,9 @@ import (
 //
 //	schema: the inputed root schema
 //	f: the result root go AST, which may render to a file, is a return value
-func GenerateRoot(f *jen.File, schemas ...*jsonschema.Schema) error {
+func GenerateRoot(opts *GeneratorOptions, f *jen.File, schemas ...*jsonschema.Schema) error {
 
-	generator, err := NewGenerator(f, schemas...)
+	generator, err := NewGenerator(opts, f, schemas...)
 	if err != nil {
 		return errors.New(err)
 	}
@@ -32,25 +32,31 @@ func GenerateRoot(f *jen.File, schemas ...*jsonschema.Schema) error {
 		sort.Strings(names)
 		for _, name := range names {
 			def := schema.Defs[name]
-			// TODO check for duplicate names
 			generator.generateDef(def)
 		}
 	}
 	return nil
 }
 
+type GeneratorOptions struct {
+	// will not generate additional properties and pattern properties by default
+	WithAdditionalProperties bool
+}
+
 type Generator struct {
+	opts     *GeneratorOptions
 	schemas  []*jsonschema.Schema
 	resolver *RefResolver
 	file     *jen.File
 }
 
-func NewGenerator(f *jen.File, schemas ...*jsonschema.Schema) (*Generator, error) {
+func NewGenerator(opts *GeneratorOptions, f *jen.File, schemas ...*jsonschema.Schema) (*Generator, error) {
 	resolver, err := NewRefResolver(schemas)
 	if err != nil {
 		return nil, errors.New(err)
 	}
 	generator := &Generator{
+		opts:     opts,
 		schemas:  schemas,
 		resolver: resolver,
 		file:     f,
@@ -93,7 +99,7 @@ func (g *Generator) generateStruct(schema *jsonschema.Schema) jen.Code {
 	noAdditionalProps := schema.NoAdditionalProps()
 	noPatternProps := len(schema.PatternProperties) == 0
 
-	if noAdditionalProps && noPatternProps {
+	if !g.opts.WithAdditionalProperties || (noAdditionalProps && noPatternProps) {
 		return jen.Struct(fields...) // No additional properties, early return
 	}
 

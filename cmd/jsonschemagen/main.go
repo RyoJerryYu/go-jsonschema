@@ -100,6 +100,9 @@ If not provided or specified to "-", output to stdout.`)
 	cmd.Flags().StringVar(&loaderOpts.BaseURI, "baseuri", "", "base URI")
 	cmd.Flags().StringVar(&loaderOpts.RootDir, "rootdir", "", "root directory")
 
+	generatorOpts := generator.GeneratorOptions{}
+	cmd.Flags().BoolVar(&generatorOpts.WithAdditionalProperties, "with-additional-properties", false, "Generate additional properties and pattern properties")
+
 	cmd.Run = func(cmd *cobra.Command, args []string) {
 		err := flags.Format()
 		checkError(err)
@@ -113,7 +116,7 @@ If not provided or specified to "-", output to stdout.`)
 		checkError(err)
 		f := jen.NewFile(flags.PkgName)
 
-		err = generator.GenerateRoot(f, schemas...)
+		err = generator.GenerateRoot(&generatorOpts, f, schemas...)
 		checkError(err)
 
 		pipeOut, err := flags.PipeOut()
