@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"io"
 	"log"
+	"net/url"
 )
 
 type Type string
@@ -39,13 +40,13 @@ func (ts *TypeSet) UnmarshalJSON(b []byte) error {
 
 type Schema struct {
 	// Core
-	Schema     string            `json:"$schema"`
-	Vocabulary map[string]bool   `json:"$vocabulary"`
-	ID         string            `json:"$id"`
-	Ref        string            `json:"$ref"`
-	DynamicRef string            `json:"$dynamicRef"`
-	Defs       map[string]Schema `json:"$defs"`
-	Comment    string            `json:"$comment"`
+	Schema     string             `json:"$schema"`
+	Vocabulary map[string]bool    `json:"$vocabulary"`
+	ID         string             `json:"$id"`
+	Ref        string             `json:"$ref"`
+	DynamicRef string             `json:"$dynamicRef"`
+	Defs       map[string]*Schema `json:"$defs"`
+	Comment    string             `json:"$comment"`
 
 	// Applying subschemas with logic
 	AllOf []Schema `json:"allOf"`
@@ -65,8 +66,8 @@ type Schema struct {
 	Contains    *Schema  `json:"contains"`
 
 	// Applying subschemas to objects
-	Properties           map[string]Schema     `json:"properties"`
-	PatternProperties    map[string]Schema     `json:"patternProperties"`
+	Properties           map[string]*Schema    `json:"properties"`
+	PatternProperties    map[string]*Schema    `json:"patternProperties"`
 	AdditionalProperties *AdditionalProperties `json:"additionalProperties"`
 	PropertyNames        *Schema               `json:"propertyNames"`
 
@@ -120,10 +121,16 @@ func (schema *Schema) UnmarshalJSON(b []byte) error {
 	return nil
 }
 
-func LoadSchema(in io.Reader) *Schema {
+// LoadSchema loads a schema from a JSON file.
+// if input schema does not have $id, it will be set to the file URI.
+func LoadSchema(in io.Reader, fileUri *url.URL) *Schema {
 	var schema Schema
 	if err := json.NewDecoder(in).Decode(&schema); err != nil {
 		log.Fatalf("failed to load schema JSON: %v", err)
+	}
+
+	if schema.ID == "" {
+		schema.ID = fileUri.String()
 	}
 
 	return &schema
@@ -174,7 +181,7 @@ func (schema *Schema) SinglePatternProp() *Schema {
 		return nil
 	}
 	for _, prop := range schema.PatternProperties {
-		return &prop
+		return prop
 	}
 	return nil
 }

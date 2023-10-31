@@ -1,7 +1,6 @@
 package main
 
 import (
-	"flag"
 	"fmt"
 	"io"
 	"log"
@@ -9,47 +8,22 @@ import (
 	"path/filepath"
 	"strings"
 
-	"git.sr.ht/~emersion/go-jsonschema"
 	"git.sr.ht/~emersion/go-jsonschema/generator"
+	"git.sr.ht/~emersion/go-jsonschema/loader"
 	"github.com/dave/jennifer/jen"
+	"github.com/go-errors/errors"
+	"github.com/iancoleman/strcase"
+	"github.com/spf13/cobra"
 )
-
-const usage = `usage: jsonschemagen -s <schema> -o <output> [options...]
-
-Generate Go types and helpers for the specified JSON schema.
-
-Options:
-
-  -s <schema>    JSON schema filename. Required.
-  -o <output>    Output filename for generated Go code. Required.
-  -n <package>   Go package name, defaults to the dirname of the output file.
-`
 
 type Flags struct {
 	SchemaFilename string
 	OutputFilename string
 	PkgName        string
-	// Args           []string
 }
 
 func LoadFlags() *Flags {
 	f := &Flags{}
-	flag.StringVar(&f.SchemaFilename, "s", "", "schema filename")
-	flag.StringVar(&f.OutputFilename, "o", "", "output filename")
-	flag.StringVar(&f.PkgName, "n", "", "package name")
-
-	flag.Usage = func() {
-		fmt.Fprint(os.Stderr, usage)
-	}
-
-	flag.Parse()
-	// f.Args = flag.Args()
-
-	if err := f.Format(); err != nil {
-		fmt.Fprintf(os.Stderr, "invalid arguments: %v", err)
-		flag.Usage()
-		os.Exit(1)
-	}
 
 	return f
 }
@@ -63,17 +37,11 @@ func (f *Flags) formatOutputFilename(filename string) string {
 	return strings.Replace(abs, "$", "", -1)
 }
 
-func (f *Flags) isStdin() bool {
-	return f.SchemaFilename == ""
-}
 func (f *Flags) isStdout() bool {
 	return f.OutputFilename == ""
 }
 
 func (f *Flags) Format() error {
-	if f.SchemaFilename == "-" {
-		f.SchemaFilename = "" // stdin
-	}
 	if f.OutputFilename == "-" {
 		f.OutputFilename = "" // stdout
 	}
@@ -85,24 +53,21 @@ func (f *Flags) Format() error {
 		f.PkgName = filepath.Base(filepath.Dir(f.OutputFilename))
 	}
 
+	f.PkgName = strcase.ToSnake(f.PkgName)
+	if f.PkgName == "type" {
+		f.PkgName = "pkg_type"
+	}
+
 	return nil
-}
-
-func (f *Flags) PipeIn() (io.ReadCloser, error) {
-	if f.isStdin() {
-		return os.Stdin, nil
-	}
-
-	r, err := os.Open(f.SchemaFilename)
-	if err != nil {
-		return nil, err
-	}
-	return r, nil
 }
 
 func (f *Flags) PipeOut() (io.WriteCloser, error) {
 	if f.isStdout() {
 		return os.Stdout, nil
+	}
+
+	if err := os.MkdirAll(filepath.Dir(f.OutputFilename), 0755); err != nil {
+		return nil, err
 	}
 
 	w, err := os.Create(f.OutputFilename)
@@ -113,26 +78,67 @@ func (f *Flags) PipeOut() (io.WriteCloser, error) {
 }
 
 func main() {
-	flags := LoadFlags()
+	cmd := cobra.Command{
+		Use:   "jsonschemagen [flags] [schema file]...",
+		Short: "Generate Go types and helpers for the specified JSON schema.",
+		Long: `Generate Go types and helpers for the specified JSON schema.
+If no schema file is specified or specified to "-", read from stdin.
 
-	pipeIn, err := flags.PipeIn()
-	if err != nil {
-		log.Fatalf("failed to open schema file: %v", err)
+Example:
+$ find schema -name '*.json' | xargs schema-generate --baseDir=$PWD > out/generated.go
+`,
 	}
-	defer pipeIn.Close()
+	flags := Flags{}
+	cmd.Flags().StringVarP(&flags.SchemaFilename, "schema", "s", "", `The schema filename, deprecated.
+recommended to use positional argument.
+"-" for stdin.`)
+	cmd.Flags().StringVarP(&flags.OutputFilename, "output", "o", "", `The output filename.
+If not provided or specified to "-", output to stdout.`)
+	cmd.Flags().StringVarP(&flags.PkgName, "packagename", "n", "", "package name")
 
-	schema := jsonschema.LoadSchema(pipeIn)
-	f := jen.NewFile(flags.PkgName)
+	loaderOpts := loader.ParseOptions{}
+	cmd.Flags().StringVar(&loaderOpts.BaseURI, "baseuri", "", "base URI")
+	cmd.Flags().StringVar(&loaderOpts.RootDir, "rootdir", "", "root directory")
 
-	generator.GenerateRoot(schema, f)
+	cmd.Run = func(cmd *cobra.Command, args []string) {
+		err := flags.Format()
+		checkError(err)
 
-	pipeOut, err := flags.PipeOut()
-	if err != nil {
-		log.Fatalf("failed to open output file: %v", err)
+		filePaths := args[:]
+		if flags.SchemaFilename != "" {
+			filePaths = append(filePaths, flags.SchemaFilename)
+		}
+
+		schemas, err := loader.New(&loaderOpts).LoadAll(filePaths)
+		checkError(err)
+		f := jen.NewFile(flags.PkgName)
+
+		err = generator.GenerateRoot(f, schemas...)
+		checkError(err)
+
+		pipeOut, err := flags.PipeOut()
+		checkError(err)
+		defer pipeOut.Close()
+
+		if err := f.Render(pipeOut); err != nil {
+			checkError(err)
+		}
 	}
-	defer pipeOut.Close()
 
-	if err := f.Render(pipeOut); err != nil {
-		log.Fatalf("failed to render output file: %v", err)
+	if err := cmd.Execute(); err != nil {
+		log.Fatal(err)
+	}
+
+}
+
+func checkError(err error) {
+	if err != nil {
+		if e, ok := err.(*errors.Error); ok {
+			fmt.Fprintln(os.Stderr, string(e.Stack()))
+		} else {
+			log.Fatalf("error: %v", err)
+		}
+
+		os.Exit(1)
 	}
 }
