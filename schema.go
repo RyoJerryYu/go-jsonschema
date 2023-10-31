@@ -218,5 +218,26 @@ func (schema *Schema) UnwrapNullableSchema() (*Schema, bool) {
 		otherIndex := (nullIndex + 1) % 2
 		return &choices[otherIndex], true
 	}
-	return nil, false
+
+	if len(schema.Type) != 2 {
+		return nil, false
+	}
+
+	nullIndex := -1
+	for i, t := range schema.Type {
+		if t == TypeNull {
+			nullIndex = i
+			break
+		}
+	}
+
+	if nullIndex < 0 {
+		return nil, false
+	}
+
+	otherIndex := (nullIndex + 1) % 2
+	otherType := schema.Type[otherIndex]
+	another := *schema
+	another.Type = TypeSet{otherType}
+	return &another, true
 }
