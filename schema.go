@@ -198,6 +198,12 @@ func (schema *Schema) NoAdditionalProps() bool {
 //			<sub-schema>
 //		}
 //	}
+//
+// or
+//
+//	{
+//		"type": ["null", <sub-type>]
+//	}
 func (schema *Schema) UnwrapNullableSchema() (*Schema, bool) {
 	for _, choices := range [][]Schema{schema.AnyOf, schema.OneOf} {
 		if len(choices) != 2 {
