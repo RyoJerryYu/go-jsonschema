@@ -21,7 +21,7 @@ func GenerateRoot(f *jen.File, schemas ...*jsonschema.Schema) error {
 
 	for _, schema := range schemas {
 		if schema.Ref == "" {
-			generator.generateDef(schema, formatRootStructName(schema))
+			generator.generateDef(schema)
 		}
 
 		var names []string
@@ -31,16 +31,9 @@ func GenerateRoot(f *jen.File, schemas ...*jsonschema.Schema) error {
 		sort.Strings(names)
 		for _, name := range names {
 			def := schema.Defs[name]
-			generator.generateDef(def, name)
+			// TODO check for duplicate names
+			generator.generateDef(def)
 		}
 	}
 	return nil
-}
-
-func formatRootStructName(schema *jsonschema.Schema) string {
-	if len(schema.Title) > 0 {
-		return schema.Title
-	}
-
-	return "root"
 }

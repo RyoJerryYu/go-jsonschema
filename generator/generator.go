@@ -3,13 +3,10 @@ package generator
 import (
 	"sort"
 	"strings"
-	"unicode"
 
 	"git.sr.ht/~emersion/go-jsonschema"
 	"github.com/dave/jennifer/jen"
 	"github.com/go-errors/errors"
-	"golang.org/x/text/cases"
-	"golang.org/x/text/language"
 )
 
 type Generator struct {
@@ -39,16 +36,6 @@ func refName(ref string) string {
 	return strings.TrimPrefix(ref, prefix)
 }
 
-func formatId(s string) string {
-	fields := strings.FieldsFunc(s, func(c rune) bool {
-		return !unicode.IsLetter(c) && !unicode.IsNumber(c)
-	})
-	for i, v := range fields {
-		fields[i] = cases.Title(language.Und).String(v)
-	}
-	return strings.Join(fields, "")
-}
-
 func (g *Generator) resolveRef(def *jsonschema.Schema) (*jsonschema.Schema, error) {
 	return g.resolver.GetSchemaByReference(def)
 }
@@ -63,7 +50,7 @@ func (g *Generator) generateStruct(schema *jsonschema.Schema) jen.Code {
 	var fields []jen.Code
 	for _, name := range names {
 		prop := schema.Properties[name]
-		id := formatId(name)
+		id := toGolangName(name)
 		required := schema.IsRequired(name)
 		t := g.generateSchemaType(prop, required)
 		jsonTag := name
@@ -80,7 +67,7 @@ func (g *Generator) generateStruct(schema *jsonschema.Schema) jen.Code {
 		return jen.Struct(fields...) // No additional properties, early return
 	}
 
-	additionPropsId := formatId("other-props")
+	additionPropsId := toGolangName("other-props")
 	additionPropsT := jen.Map(jen.String()).Add(jen.Qual("encoding/json", "RawMessage"))
 	additionPropsTags := map[string]string{"json": "-"}
 
@@ -114,7 +101,7 @@ func (g *Generator) generateSchemaType(schema *jsonschema.Schema, required bool)
 		if err != nil {
 			return jen.Qual("encoding/json", "RawMessage")
 		}
-		t := jen.Id(formatId(refName))
+		t := jen.Id(toGolangName(refName))
 		if !required && schema.SchemaType() == jsonschema.TypeObject && schema.NoAdditionalProps() && len(schema.PatternProperties) == 0 {
 			t = jen.Op("*").Add(t)
 		}
@@ -149,8 +136,8 @@ func (g *Generator) generateSchemaType(schema *jsonschema.Schema, required bool)
 	}
 }
 
-func (g *Generator) generateDef(schema *jsonschema.Schema, name string) {
-	id := formatId(name)
+func (g *Generator) generateDef(schema *jsonschema.Schema) {
+	id := SchemaTypeName(schema)
 
 	if schema.Ref == "" && schema.SchemaType() == "" {
 		g.file.Type().Id(id).Struct(
@@ -181,7 +168,7 @@ func (g *Generator) generateDef(schema *jsonschema.Schema, name string) {
 
 			g.file.Func().Params(
 				jen.Id("v").Id(id),
-			).Id(formatId(refName)).Params().Params(
+			).Id(toGolangName(refName)).Params().Params(
 				t,
 				jen.Id("error"),
 			).Block(
