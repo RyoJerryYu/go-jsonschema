@@ -85,7 +85,7 @@ func main() {
 If no schema file is specified or specified to "-", read from stdin.
 
 Example:
-$ find schema -name '*.json' | xargs schema-generate --baseDir=$PWD > out/generated.go
+$ find schema -name '*.json' | xargs jsonschemagen --rootdir=$PWD -n out > out/generated.go
 `,
 	}
 	flags := Flags{}
