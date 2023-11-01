@@ -3,7 +3,7 @@ package generator
 import (
 	"testing"
 
-	"git.sr.ht/~emersion/go-jsonschema"
+	"github.com/RyoJerryYu/go-jsonschema"
 )
 
 func TestThatJavascriptKeyNamesCanBeConvertedToValidGoNames(t *testing.T) {

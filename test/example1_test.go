@@ -4,7 +4,7 @@ import (
 	"encoding/json"
 	"testing"
 
-	example1 "git.sr.ht/~emersion/go-jsonschema/test/example1_gen"
+	example1 "github.com/RyoJerryYu/go-jsonschema/test/example1_gen"
 )
 
 func TestExample1(t *testing.T) {

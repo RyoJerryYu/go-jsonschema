@@ -8,8 +8,8 @@ import (
 	"path/filepath"
 	"strings"
 
-	"git.sr.ht/~emersion/go-jsonschema/generator"
-	"git.sr.ht/~emersion/go-jsonschema/loader"
+	"github.com/RyoJerryYu/go-jsonschema/generator"
+	"github.com/RyoJerryYu/go-jsonschema/loader"
 	"github.com/dave/jennifer/jen"
 	"github.com/go-errors/errors"
 	"github.com/iancoleman/strcase"

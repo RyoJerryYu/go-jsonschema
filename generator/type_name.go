@@ -8,7 +8,7 @@ import (
 	"strings"
 	"unicode"
 
-	"git.sr.ht/~emersion/go-jsonschema"
+	"github.com/RyoJerryYu/go-jsonschema"
 )
 
 func (g *Generator) SchemaTypeName(schema *jsonschema.Schema) string {

@@ -3,14 +3,14 @@ package test
 import (
 	"testing"
 
-	abandoned "git.sr.ht/~emersion/go-jsonschema/test/abandoned_gen"
+	abandoned "github.com/RyoJerryYu/go-jsonschema/test/abandoned_gen"
 )
 
 func TestAbandoned(t *testing.T) {
 	// this just tests the name generation works correctly
-	r := abandoned.Root{
+	r := abandoned.Abandoned{
 		Name:      "jonson",
-		Abandoned: &abandoned.PackageList{},
+		Abandoned: &struct{}{},
 	}
 	// the test is the presence of the Abandoned field
 	if r.Abandoned == nil {

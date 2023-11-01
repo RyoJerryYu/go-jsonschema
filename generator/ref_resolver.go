@@ -5,7 +5,7 @@ import (
 	"net/url"
 	"strings"
 
-	"git.sr.ht/~emersion/go-jsonschema"
+	"github.com/RyoJerryYu/go-jsonschema"
 	"github.com/go-errors/errors"
 )
 
