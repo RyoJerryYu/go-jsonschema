@@ -148,6 +148,9 @@ func (g *Generator) generateSchemaType(schema *jsonschema.Schema, required bool)
 	}
 
 	if subschema, ok := schema.UnwrapNullableSchema(); ok {
+		if subschema.SchemaType() == jsonschema.TypeArray {
+			return jen.Add(g.generateSchemaType(subschema, true))
+		}
 		return jen.Op("*").Add(g.generateSchemaType(subschema, true))
 	}
 
