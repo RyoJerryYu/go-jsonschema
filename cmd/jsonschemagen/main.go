@@ -83,10 +83,8 @@ func main() {
 		Short: "Generate Go types and helpers for the specified JSON schema.",
 		Long: `Generate Go types and helpers for the specified JSON schema.
 If no schema file is specified or specified to "-", read from stdin.
-
-Example:
-$ find schema -name '*.json' | xargs jsonschemagen --rootdir=$PWD -n out > out/generated.go
 `,
+		Example: "$ find schema -name '*.json' | xargs jsonschemagen --rootdir=$PWD -n out > out/generated.go",
 	}
 	flags := Flags{}
 	cmd.Flags().StringVarP(&flags.SchemaFilename, "schema", "s", "", `The schema filename, deprecated.
