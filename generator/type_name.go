@@ -36,8 +36,8 @@ func (g *Generator) toGolangName(s string) string {
 	}
 	result := buf.String()
 	for _, keyword := range g.opts.UpperPropertyNames {
-		if result == keyword {
-			result = strings.ToUpper(result)
+		if upper := strings.ToUpper(result); upper == strings.ToUpper(keyword) {
+			result = upper
 		}
 	}
 

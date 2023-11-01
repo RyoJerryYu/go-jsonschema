@@ -102,7 +102,9 @@ If not provided or specified to "-", output to stdout.`)
 
 	generatorOpts := generator.GeneratorOptions{}
 	cmd.Flags().BoolVar(&generatorOpts.WithAdditionalProperties, "with-additional-properties", false, "Generate additional properties and pattern properties")
-	cmd.Flags().StringSliceVarP(&generatorOpts.UpperPropertyNames, "upper-property-names", "u", nil, "Apply the upper case rule to the property names")
+	cmd.Flags().StringSliceVarP(&generatorOpts.UpperPropertyNames, "upper-property-names", "u", nil, `Apply full upper case to the property names.
+e.g. given "id", "Id" or "ID" as flags, when a type or field name 
+parsed as "Id", would be converted as "ID"`)
 
 	cmd.Run = func(cmd *cobra.Command, args []string) {
 		err := flags.Format()

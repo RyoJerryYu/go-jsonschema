@@ -8,9 +8,10 @@ import (
 
 func TestThatJavascriptKeyNamesCanBeConvertedToValidGoNames(t *testing.T) {
 	tests := []struct {
-		description string
-		input       string
-		expected    string
+		description     string
+		input           string
+		upperProperties []string
+		expected        string
 	}{
 		{
 			description: "Camel case is converted to pascal case.",
@@ -52,10 +53,20 @@ func TestThatJavascriptKeyNamesCanBeConvertedToValidGoNames(t *testing.T) {
 			input:       "123ABC",
 			expected:    "_123ABC",
 		},
+		{
+			description:     "Upper property names are converted to full upper case.",
+			input:           "id",
+			upperProperties: []string{"id"},
+			expected:        "ID",
+		},
 	}
 
 	for _, test := range tests {
-		g := &Generator{}
+		g := &Generator{
+			opts: &GeneratorOptions{
+				UpperPropertyNames: test.upperProperties,
+			},
+		}
 		actual := g.toGolangName(test.input)
 
 		if test.expected != actual {
