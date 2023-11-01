@@ -11,13 +11,13 @@ import (
 	"git.sr.ht/~emersion/go-jsonschema"
 )
 
-func SchemaTypeName(schema *jsonschema.Schema) string {
+func (g *Generator) SchemaTypeName(schema *jsonschema.Schema) string {
 	name := getIdentifier(schema)
-	return toGolangName(name)
+	return g.toGolangName(name)
 }
 
 // toGolangName strips invalid characters out of golang struct or field names.
-func toGolangName(s string) string {
+func (g *Generator) toGolangName(s string) string {
 	buf := bytes.NewBuffer([]byte{})
 	fields := strings.FieldsFunc(s, func(c rune) bool {
 		return !unicode.IsLetter(c) && !unicode.IsNumber(c)
@@ -34,7 +34,14 @@ func toGolangName(s string) string {
 
 		buf.WriteString(strings.ToUpper(v[:1]) + v[1:])
 	}
-	return buf.String()
+	result := buf.String()
+	for _, keyword := range g.opts.UpperPropertyNames {
+		if result == keyword {
+			result = strings.ToUpper(result)
+		}
+	}
+
+	return result
 }
 
 type patternMatcher struct {

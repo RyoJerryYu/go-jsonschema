@@ -55,7 +55,8 @@ func TestThatJavascriptKeyNamesCanBeConvertedToValidGoNames(t *testing.T) {
 	}
 
 	for _, test := range tests {
-		actual := toGolangName(test.input)
+		g := &Generator{}
+		actual := g.toGolangName(test.input)
 
 		if test.expected != actual {
 			t.Errorf("For test '%s', for input '%s' expected '%s' but got '%s'.", test.description, test.input, test.expected, actual)

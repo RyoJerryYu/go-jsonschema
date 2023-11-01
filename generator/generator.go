@@ -44,6 +44,8 @@ func GenerateRoot(opts *GeneratorOptions, f *jen.File, schemas ...*jsonschema.Sc
 type GeneratorOptions struct {
 	// will not generate additional properties and pattern properties by default
 	WithAdditionalProperties bool
+	// will apply the upper case rule to the property names
+	UpperPropertyNames []string
 }
 
 type Generator struct {
@@ -87,7 +89,7 @@ func (g *Generator) generateStruct(schema *jsonschema.Schema) jen.Code {
 	var fields []jen.Code
 	for _, name := range names {
 		prop := schema.Properties[name]
-		id := toGolangName(name)
+		id := g.toGolangName(name)
 		required := schema.IsRequired(name)
 		t := g.generateSchemaType(prop, required)
 		jsonTag := name
@@ -104,7 +106,7 @@ func (g *Generator) generateStruct(schema *jsonschema.Schema) jen.Code {
 		return jen.Struct(fields...) // No additional properties, early return
 	}
 
-	additionPropsId := toGolangName("other-props")
+	additionPropsId := g.toGolangName("other-props")
 	additionPropsT := jen.Map(jen.String()).Add(jen.Qual("encoding/json", "RawMessage"))
 	additionPropsTags := map[string]string{"json": "-"}
 
@@ -138,7 +140,7 @@ func (g *Generator) generateSchemaType(schema *jsonschema.Schema, required bool)
 		if err != nil {
 			return jen.Qual("encoding/json", "RawMessage")
 		}
-		t := jen.Id(SchemaTypeName(schema))
+		t := jen.Id(g.SchemaTypeName(schema))
 		if !required && schema.SchemaType() == jsonschema.TypeObject && schema.NoAdditionalProps() && len(schema.PatternProperties) == 0 {
 			t = jen.Op("*").Add(t)
 		}
@@ -174,7 +176,7 @@ func (g *Generator) generateSchemaType(schema *jsonschema.Schema, required bool)
 }
 
 func (g *Generator) generateDef(schema *jsonschema.Schema, file *jen.File) {
-	id := SchemaTypeName(schema)
+	id := g.SchemaTypeName(schema)
 
 	if schema.Ref == "" && schema.SchemaType() == "" {
 		file.Type().Id(id).Struct(
@@ -205,7 +207,7 @@ func (g *Generator) generateDef(schema *jsonschema.Schema, file *jen.File) {
 
 			file.Func().Params(
 				jen.Id("v").Id(id),
-			).Id(toGolangName(refName)).Params().Params(
+			).Id(g.toGolangName(refName)).Params().Params(
 				t,
 				jen.Id("error"),
 			).Block(
