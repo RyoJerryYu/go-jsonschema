@@ -25,7 +25,7 @@ func GenerateRoot(opts *GeneratorOptions, f *jen.File, schemas ...*jsonschema.Sc
 	for _, schema := range schemas {
 		// if the root schema is a reference, do not generate it
 		if schema.Ref == "" {
-			generator.generateDef(schema, f)
+			generator.GenerateDef(schema, f)
 		}
 
 		var names []string
@@ -35,7 +35,7 @@ func GenerateRoot(opts *GeneratorOptions, f *jen.File, schemas ...*jsonschema.Sc
 		sort.Strings(names)
 		for _, name := range names {
 			def := schema.Defs[name]
-			generator.generateDef(def, f)
+			generator.GenerateDef(def, f)
 		}
 	}
 	return nil
@@ -89,15 +89,19 @@ func (g *Generator) generateStruct(schema *jsonschema.Schema) jen.Code {
 	var fields []jen.Code
 	for _, name := range names {
 		prop := schema.Properties[name]
-		id := g.toGolangName(name)
 		required := schema.IsRequired(name)
 		t := g.generateSchemaType(prop, required)
+
+		id := g.toGolangName(name)
 		jsonTag := name
 		if !required {
 			jsonTag += ",omitempty"
 		}
-		tags := map[string]string{"json": jsonTag}
-		fields = append(fields, jen.Id(id).Add(t).Tag(tags))
+		field := jen.Id(id).Add(t).Tag(map[string]string{"json": jsonTag})
+		if prop.Description != "" {
+			field.Comment(prop.Description)
+		}
+		fields = append(fields, field)
 	}
 	noAdditionalProps := schema.NoAdditionalProps()
 	noPatternProps := len(schema.PatternProperties) == 0
@@ -141,7 +145,7 @@ func (g *Generator) generateSchemaType(schema *jsonschema.Schema, required bool)
 			return jen.Qual("encoding/json", "RawMessage")
 		}
 		t := jen.Id(g.SchemaTypeName(schema))
-		if !required && schema.SchemaType() == jsonschema.TypeObject && schema.NoAdditionalProps() && len(schema.PatternProperties) == 0 {
+		if !required && schema.SchemaType() == jsonschema.TypeObject {
 			t = jen.Op("*").Add(t)
 		}
 		return t
@@ -178,7 +182,7 @@ func (g *Generator) generateSchemaType(schema *jsonschema.Schema, required bool)
 	}
 }
 
-func (g *Generator) generateDef(schema *jsonschema.Schema, file *jen.File) {
+func (g *Generator) GenerateDef(schema *jsonschema.Schema, file *jen.File) {
 	id := g.SchemaTypeName(schema)
 
 	if schema.Ref == "" && schema.SchemaType() == "" {
