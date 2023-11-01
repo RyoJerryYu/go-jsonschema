@@ -1,5 +1,7 @@
 # go-jsonschema
 
+[![Go Report Card](https://goreportcard.com/badge/github.com/RyoJerryYu/go-jsonschema)](https://goreportcard.com/report/github.com/RyoJerryYu/go-jsonschema) [![Go Reference](https://pkg.go.dev/badge/github.com/RyoJerryYu/go-jsonschema.svg)](https://pkg.go.dev/github.com/RyoJerryYu/go-jsonschema) ![Go version](https://img.shields.io/github/go-mod/go-version/RyoJerryYu/go-jsonschema/master)
+
 A [JSON schema] code generator for Go, supporting draft 2020-12, 
 supporting reference resolving between multiple schema files.
 
@@ -13,6 +15,12 @@ This module is a fork of [git.sr.ht/~emersion/go-jsonschema], with the following
 
 For the above features, we introduce some breaking changes,
 so I publish this module instead of raising a PR.
+
+## Installation
+
+```sh
+go install github.com/RyoJerryYu/go-jsonschema/cmd/jsonschemagen
+```
 
 ## Usage
 
