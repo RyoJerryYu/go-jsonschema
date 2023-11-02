@@ -4,4 +4,4 @@
 /out
 /test/*_gen
 /jsonschemagen
-
+/coverage.txt

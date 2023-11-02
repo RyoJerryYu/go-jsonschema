@@ -1,6 +1,9 @@
 PKG := .
 CMD := $(PKG)/cmd/jsonschemagen
+PACKAGE := github.com/RyoJerryYu/go-jsonschema
 BIN := jsonschemagen
+
+CODECOVFLAGS=-coverprofile=coverage.txt -covermode=atomic -coverpkg=${PACKAGE}
 
 # Build
 
@@ -33,7 +36,7 @@ test/%_gen/generated.go: test/%.json
 
 test: $(BIN) $(GENERATED_SOURCE)
 	@echo "\n+ Executing tests for $(PKG)"
-	go test -v -race -cover $(PKG)/...
+	go test -v -race ${CODECOVFLAGS} $(PKG)/...
     
 
 codecheck: fmt lint vet
