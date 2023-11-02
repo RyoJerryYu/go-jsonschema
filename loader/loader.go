@@ -5,6 +5,7 @@ import (
 	"net/url"
 	"os"
 	"path"
+	"sort"
 	"strings"
 
 	"github.com/RyoJerryYu/go-jsonschema"
@@ -66,6 +67,8 @@ func (l *Loader) LoadAll(filePaths []string) ([]*jsonschema.Schema, error) {
 
 		return []*jsonschema.Schema{schema}, nil
 	}
+
+	sort.Strings(filePaths)
 
 	schemas := make([]*jsonschema.Schema, len(filePaths))
 	for i, filePath := range filePaths {
