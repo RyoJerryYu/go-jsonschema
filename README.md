@@ -1,6 +1,6 @@
 # go-jsonschema
 
-[![Go Report Card](https://goreportcard.com/badge/github.com/RyoJerryYu/go-jsonschema)](https://goreportcard.com/report/github.com/RyoJerryYu/go-jsonschema) [![Go Reference](https://pkg.go.dev/badge/github.com/RyoJerryYu/go-jsonschema.svg)](https://pkg.go.dev/github.com/RyoJerryYu/go-jsonschema) ![Go version](https://img.shields.io/github/go-mod/go-version/RyoJerryYu/go-jsonschema/master)
+[![Go Report Card](https://goreportcard.com/badge/github.com/RyoJerryYu/go-jsonschema)](https://goreportcard.com/report/github.com/RyoJerryYu/go-jsonschema) [![Go Reference](https://pkg.go.dev/badge/github.com/RyoJerryYu/go-jsonschema.svg)](https://pkg.go.dev/github.com/RyoJerryYu/go-jsonschema) ![Go version](https://img.shields.io/github/go-mod/go-version/RyoJerryYu/go-jsonschema/master) ![GitHub release (latest SemVer)](https://img.shields.io/github/v/release/RyoJerryYu/go-jsonschema?sort=semver)
 
 A [JSON schema] code generator for Go, supporting draft 2020-12, 
 supporting reference resolving between multiple schema files.
